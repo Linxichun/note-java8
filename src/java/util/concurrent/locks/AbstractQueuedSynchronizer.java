@@ -563,6 +563,7 @@ public abstract class AbstractQueuedSynchronizer
      */
     protected final boolean compareAndSetState(int expect, int update) {
         // See below for intrinsics setup to support this
+        // 可以看到compareAndSetState底层其实是调用的unsafe的CAS系列方法
         return unsafe.compareAndSwapInt(this, stateOffset, expect, update);
     }
 
@@ -1508,6 +1509,7 @@ public abstract class AbstractQueuedSynchronizer
      *         current thread, and {@code false} if the current thread
      *         is at the head of the queue or the queue is empty
      * @since 1.7
+     * 有排队的前置任务
      */
     public final boolean hasQueuedPredecessors() {
         // The correctness of this depends on head being initialized
@@ -1516,6 +1518,10 @@ public abstract class AbstractQueuedSynchronizer
         Node t = tail; // Read fields in reverse initialization order
         Node h = head;
         Node s;
+        /* 如果头不等于尾，且（头结点的下一个为空 或者 头结点的下一个节点对应的线程不等于当前线程）
+        * 上面这样说有点怪，【翻译】一下就是：
+        * 队列不为空，且头结点的下一个节点对应线程不是本线程，说明排在最前面不是本线程
+        * */
         return h != t &&
             ((s = h.next) == null || s.thread != Thread.currentThread());
     }
