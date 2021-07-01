@@ -134,6 +134,16 @@ import sun.misc.SharedSecrets;
  * @see     TreeMap
  * @see     Hashtable
  * @since   1.2
+ * @LinxcNote
+ * 数据结构：
+ * 1.7 数组+链表
+ * 1.8 数组+链表+红黑树
+ * 好处：如果用继续用链表的话，链表元素一多，挨个查找匹配的效率就会很差。
+ * 而红黑树，是个二叉树，既有序，又平衡。可以使其类似于二分查找，大大提升查询效率
+ * 链表树化成红黑树的阈值是8；红黑树退化成链表的阈值为6；之所以有这两个值，就是一个泊松分布的概念（统计学）
+ *
+ * 数组都是需要预空间的，而初始值默认的是16。为什么是16？一是方便计算，而是方便迁移
+ * 比如int类型，需要用到4个字节，即32个二进制位
  */
 public class HashMap<K,V> extends AbstractMap<K,V>
     implements Map<K,V>, Cloneable, Serializable {

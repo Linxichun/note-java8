@@ -513,6 +513,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     /**
      * The default initial table capacity.  Must be a power of 2
      * (i.e., at least 1) and at most MAXIMUM_CAPACITY.
+     * 默认的初始数组长度，必需是2的n次方
      */
     private static final int DEFAULT_CAPACITY = 16;
 
@@ -680,6 +681,10 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * cheapest possible way to reduce systematic lossage, as well as
      * to incorporate impact of the highest bits that would otherwise
      * never be used in index calculations because of table bounds.
+     * @LinxcNote 位移（计算效率最高）+扰动函数；
+     * 那既然位运算效率高，那它就方便来替换加、减、乘、除、取余等运算，所以这个数必是2的n次方，
+     * 而且这样取模的运算也将变得十分简单，只要与长度n-1（）
+     *
      */
     static final int spread(int h) {
         return (h ^ (h >>> 16)) & HASH_BITS;
