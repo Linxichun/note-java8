@@ -507,25 +507,33 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * bounds for power of two table sizes, and is further required
      * because the top two bits of 32bit hash fields are used for
      * control purposes.
+     * 二进制：0100 0000 0000 0000 0000 0000 0000 0000
+     * 十进制：1073741824
      */
     private static final int MAXIMUM_CAPACITY = 1 << 30;
 
     /**
      * The default initial table capacity.  Must be a power of 2
      * (i.e., at least 1) and at most MAXIMUM_CAPACITY.
-     * 默认的初始数组长度，必需是2的n次方
+     * 默认的初始数组长度，必需是2的n次方（扩容的时候才能更好地进行位运算）
+     * 那为什么这个值不能是4、8或者32呢？还是那句话，是概率统计的结果
+     * 所以为16的原因有俩：
+     * 1、这个数必须是2的n次方，方便在扩容的时候进行相应的位运算；
+     * 2、2的n次方取16就是一个概率统计的原因了
      */
     private static final int DEFAULT_CAPACITY = 16;
 
     /**
      * The largest possible (non-power of two) array size.
      * Needed by toArray and related methods.
+     * 最大数组长度，为什么要-8，因为Array在java中没有class文件，JVM是直接操作底层数据结构底层内存的，所以这8位是给其储存头信息和元数据信息用的
      */
     static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
     /**
      * The default concurrency level for this table. Unused but
      * defined for compatibility with previous versions of this class.
+     * 默认的并发级别
      */
     private static final int DEFAULT_CONCURRENCY_LEVEL = 16;
 
@@ -535,6 +543,9 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * actual floating point value isn't normally used -- it is
      * simpler to use expressions such as {@code n - (n >>> 2)} for
      * the associated resizing threshold.
+     * @LinxcNote
+     * 负载因子，不会等其真正超过数组容量再扩容，肯定是快放满的时候就进行扩容，当达到这个阈值时，即开始扩容，
+     * 那为什么是0.75呢？当然也是概率统计出来的
      */
     private static final float LOAD_FACTOR = 0.75f;
 
@@ -545,6 +556,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * than 2, and should be at least 8 to mesh with assumptions in
      * tree removal about conversion back to plain bins upon
      * shrinkage.
+     * @LinxcNote 树化的阈值
      */
     static final int TREEIFY_THRESHOLD = 8;
 
@@ -552,6 +564,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * The bin count threshold for untreeifying a (split) bin during a
      * resize operation. Should be less than TREEIFY_THRESHOLD, and at
      * most 6 to mesh with shrinkage detection under removal.
+     * @LinxcNote 退树化阈值
      */
     static final int UNTREEIFY_THRESHOLD = 6;
 
@@ -595,6 +608,15 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     static final int MOVED     = -1; // hash for forwarding nodes
     static final int TREEBIN   = -2; // hash for roots of trees
     static final int RESERVED  = -3; // hash for transient reservations
+    /**
+     * 7fffffff是8位16进制
+     * 每个16进制代表4个bit
+     * 8✖4bit=32bit=4Byte
+     * f的二进制为：1111，7的二进制位0111
+     * int类型的长度位4Byte
+     * 左边起，第一位为符号位，0代表正数，1代表负数
+     * 0x7fffffff代表int的最大值
+     * */
     static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
 
     /** Number of CPUS, to place bounds on some sizings */
@@ -683,8 +705,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * never be used in index calculations because of table bounds.
      * @LinxcNote 位移（计算效率最高）+扰动函数；
      * 那既然位运算效率高，那它就方便来替换加、减、乘、除、取余等运算，所以这个数必是2的n次方，
-     * 而且这样取模的运算也将变得十分简单，只要与长度n-1（）
-     *
+     * 而且这样取模的运算也将变得十分简单，只要与长度n-1进行与运算
      */
     static final int spread(int h) {
         return (h ^ (h >>> 16)) & HASH_BITS;
@@ -693,14 +714,31 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     /**
      * Returns a power of two table size for the given desired capacity.
      * See Hackers Delight, sec 3.2
+     * @LinxcNote 返回一个比给定整数大且最接近的2的幂次方整数
+     * 例如将一个0000 …… 01XX XXXX变为0000 …… 0111 1111(X代表可为0也可为1，X前面的1为从最高位开始第一个为1的那一位)
+     * 举例：例如数字57，32位下二进制为 0000 0000 0000 0000 0000 0000 0011 1001
+     * 由于正数补码为自身，则下面都是补码参与运算（由于前面24位都是0，且本次是右移，故我后面直接拿后面8位演示，方便呈现下）
+     * n = n | (n>>>1) 即 0011 1001 | 0001 1100 = 0011 1101
+     * n = n | (n>>>2) 即 0011 1101 | 0000 1111 = 0011 1111
+     * n = n | (n>>>4) 即 0011 1111 | 0000 0011 = 0011 1111
+     * ……
+     * 以上，就会发现其实n在做n = n | (n>>>2)就已经得出值为0011 1111 = 63（十进制）
+     * 后面继续的操作也只是保持这个结果，这个例子主要是57并不是一个很大的数，如果数字很大，会用到整个31位（32位首位为符号位，不算），那就很有必要了
+     * 刚好看下这5次位运算位数之和也刚好为 1+2+4+8+16 = 31
      */
     private static final int tableSizeFor(int c) {
+        // 做这么一步是为了防止c刚好是2次方数，而导致下面处理不适用，还得单独开个分支
         int n = c - 1;
         n |= n >>> 1;
         n |= n >>> 2;
         n |= n >>> 4;
         n |= n >>> 8;
         n |= n >>> 16;
+        /*
+        * 若n<0，则返回2^0=1
+        * 若n>=MAXIMUM_CAPACITY，则返回MAXIMUM_CAPACITY
+        * 其余皆取n+1（此时经过上面的处理，n的值刚好为2^n-1）
+        * */
         return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
     }
 
@@ -821,7 +859,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
 
 
     /* ---------------- Public operations -------------- */
-
+    /* ---------------- 由下面这些构造函数代码可以看出，它们都没有去new一个数组。实际上它们都是在put的时候才会实例化数组 -------------- */
     /**
      * Creates a new, empty map with the default initial table size (16).
      */
@@ -837,10 +875,15 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * sizing to accommodate this many elements.
      * @throws IllegalArgumentException if the initial capacity of
      * elements is negative
+     * @LinxcNote 带指定初始容量参数的构造函数
      */
     public ConcurrentHashMap(int initialCapacity) {
         if (initialCapacity < 0)
             throw new IllegalArgumentException();
+        /* 正数MAXIMUM_CAPACITY无符号向右移一位，即除以2
+        * 当传入参数的大于等于最大容量值的1/2，则取最大的容量值作为初始值；
+        * 当不到其1/2时，则通过tableSizeFor方法得到容量，详见tableSizeFor代码
+        * */
         int cap = ((initialCapacity >= (MAXIMUM_CAPACITY >>> 1)) ?
                    MAXIMUM_CAPACITY :
                    tableSizeFor(initialCapacity + (initialCapacity >>> 1) + 1));
