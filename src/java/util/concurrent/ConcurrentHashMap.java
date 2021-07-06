@@ -263,6 +263,11 @@ import java.util.stream.Stream;
  * @author Doug Lea
  * @param <K> the type of keys maintained by this map
  * @param <V> the type of mapped values
+ *
+ * @LinxcNote
+ * 为什么使用红黑树？在使用普通二叉树的时候，很容易由于加入的数据递增，很容易导致树存储数据单向，继而像个链表，这样就导致后面的查询时间复杂度比较高
+ * 所以光用二叉树不行，还得用平衡树，保证左子树和右子树高度尽可能相等。所以引入了AVL树，AVL树的特点就是左子树和右子树高度之差不能超过1；
+ * 高度差超过1，则树就要进行旋转操作。损失了部分插入的性能，提升了查询的性能
  */
 public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     implements ConcurrentMap<K,V>, Serializable {
@@ -834,6 +839,11 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * when table is null, holds the initial table size to use upon
      * creation, or 0 for default. After initialization, holds the
      * next element count value upon which to resize the table.
+     * @LinxcNote 大小控制(size control)
+     * 如果为负数，则表示表正在初始化或调整大小
+     * 值为-1：代表初始化
+     * 值为-(1+n活跃的扩容线程数)：代表
+     * 否则，当table为null时，将保留创建时要使用的初始表大小，默认为0。初始化后，保存下一个要调整表大小的元素计数值
      */
     private transient volatile int sizeCtl;
 
@@ -896,6 +906,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * @param m the map
      */
     public ConcurrentHashMap(Map<? extends K, ? extends V> m) {
+        // 大小控制，初始为默认容量
         this.sizeCtl = DEFAULT_CAPACITY;
         putAll(m);
     }
@@ -1061,7 +1072,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         int binCount = 0;
         for (Node<K,V>[] tab = table;;) {
             Node<K,V> f; int n, i, fh;
-            if (tab == null || (n = tab.length) == 0)
+            if (tab == null || (n = tab.length) == 0)   // 若还没创建数组（hash槽）或者数组长度为0，则初始化数组
                 tab = initTable();
             else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
                 if (casTabAt(tab, i, null,
@@ -2269,6 +2280,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * Initializes table, using the size recorded in sizeCtl.
      */
     private final Node<K,V>[] initTable() {
+        // Node类型的一个数组
         Node<K,V>[] tab; int sc;
         while ((tab = table) == null || tab.length == 0) {
             if ((sc = sizeCtl) < 0)
